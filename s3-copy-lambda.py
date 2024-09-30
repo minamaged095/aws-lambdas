@@ -5,29 +5,44 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.resource('s3')
+def lambda_handler(source_bucket, folder_prefix, destination_bucket):
+    # Create an S3 client
+    s3 = boto3.client('s3')
 
+    # List all objects under the source prefix
+    response = s3.list_objects_v2(Bucket=source_bucket, Prefix=folder_prefix)
 
-def lambda_handler(event, context):
+    if 'Contents' not in response:
+        print(f"No objects found in {source_bucket}/{folder_prefix}")
+        return
 
-    fromBucket = event['fromBucket']
-    fromKey = event['fromKey']
-    toBucket = event['toBucket']
-    toKey = event['toKey']
+    for obj in response['Contents']:
+        # Get the source object key
+        source_key = obj['Key']
 
-    #create source dictionary
-    copy_source = {
-        'Bucket': 'fromBucket',
-        'Key': 'fromKey'
-    }
+        # Construct the destination key by maintaining the relative path
+        # For example: if folder_prefix is "folder/subfolder/", folder_prefix could be "newfolder/subfolder/"
+        destination_key = source_key
 
-    copyReturn = s3.meta.client.copy(copy_source, 'toBucket', 'toKey')
+        # Define the copy source
+        copy_source = {
+            'Bucket': source_bucket,
+            'Key': source_key
+        }
 
-    print("copy completed")
+        # Perform the copy operation
+        print(f"Copying {source_key} to {destination_bucket}/{destination_key}")
+        s3.copy(copy_source, destination_bucket, destination_key)
 
-    logger.info(f"CloudWatch logs group: {context.log_group_name}")
+    print("Recursive copy completed.")
 
-    #return the output as a JSON string
+def main():
+    # Example Usage
+    source_bucket = 'source-bucket-name'
+    folder_prefix = 'folder/subfolder/'  # Prefix to copy from
+    destination_bucket = 'destination-bucket-name'
 
-    return json.dumps(copyReturn)
+    lambda_handler(source_bucket, folder_prefix, destination_bucket)
 
+if __name__ == "__main__":
+    main()
